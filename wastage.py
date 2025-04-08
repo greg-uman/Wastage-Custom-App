@@ -11,10 +11,10 @@ import xlsxwriter
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# 1. Set page config FIRST
+# Set page config FIRST
 st.set_page_config(page_title="Food Waste Reporting", page_icon="🍽️")
 
-# 2. AWS Configuration - Use environment variables
+# AWS Configuration - Use environment variables
 AWS_ACCESS_KEY_ID = st.secrets["aws"]["AWS_ACCESS_KEY_ID"]
 AWS_SECRET_ACCESS_KEY = st.secrets["aws"]["AWS_SECRET_ACCESS_KEY"]
 AWS_REGION = os.environ.get('AWS_REGION', 'ap-southeast-2')
@@ -35,50 +35,24 @@ def initialize_s3_client():
         st.error("Failed to initialize cloud storage connection")
         return None
 
-def create_analytics_sheets(df):
-    """Create additional analytical worksheets"""
-    analytics = {}
-    
-    # 1. Outlet Wastage Summary
-    outlet_summary = df.groupby('Outlet')['Amount Wasted'] \
-        .agg(['count', 'sum']) \
-        .rename(columns={'count': 'Incidents', 'sum': 'Total Wastage'}) \
-        .sort_values('Total Wastage', ascending=False)
-    analytics["Outlet Summary"] = outlet_summary
-    
-    # 2. Department Wastage Summary
-    dept_summary = df.groupby('Department')['Amount Wasted'] \
-        .agg(['count', 'sum']) \
-        .rename(columns={'count': 'Incidents', 'sum': 'Total Wastage'}) \
-        .sort_values('Total Wastage', ascending=False)
-    analytics["Department Summary"] = dept_summary
-    
-    # 3. Product Wastage Summary
-    product_summary = df.groupby('Product Name')['Amount Wasted'] \
-        .agg(['count', 'sum']) \
-        .rename(columns={'count': 'Incidents', 'sum': 'Total Wastage'}) \
-        .sort_values('Total Wastage', ascending=False)
-    analytics["Product Summary"] = product_summary
-    
-    return analytics
-
 def main():
     # Initialize S3 client
     s3_client = initialize_s3_client()
     if not s3_client:
         return
     
-    # 3. Maintain state across interactions
+    # Maintain state across interactions
     if 'num_products' not in st.session_state:
-        st.session_state.num_products = 0
+        st.session_state.num_products = 1  # Default to 1
+        st.session_state.confirmed_num = 1
     
     if 'wastage_items' not in st.session_state:
         st.session_state.wastage_items = []
 
-    # 4. Page title
+    # Page title
     st.title("🍽️ Food Waste Reporting")
 
-    # 5. Basic user info
+    # Basic user info
     submitter_name = st.text_input("👤 Your Name", value="")
 
     # Department selection
@@ -94,12 +68,13 @@ def main():
     }
     outlet = st.selectbox("📍 Outlet", outlet_options.get(department, []))
 
-    # 6. Wastage reporting
+    # Wastage reporting
     has_wastage = st.radio("Any wastage today?", ["No", "Yes"], index=0)
     
     # Reset if toggled from Yes to No
     if has_wastage == "No":
-        st.session_state.num_products = 0
+        st.session_state.num_products = 1
+        st.session_state.confirmed_num = 1
         st.session_state.wastage_items = []
 
     if has_wastage == "Yes":
@@ -107,22 +82,32 @@ def main():
         if st.session_state.num_products < 1:
             st.session_state.num_products = 1
 
-        st.session_state.num_products = st.number_input(
-            "Number of wasted products (Press Enter to continue)",
-            min_value=1, 
-            max_value=50, 
-            value=st.session_state.num_products
-        )
+        with st.form("product_count_form"):
+            # Number input with separate confirmed state
+            new_num = st.number_input(
+                "Number of wasted products (Press Enter to confirm)",
+                min_value=1, 
+                max_value=50, 
+                value=st.session_state.confirmed_num,
+                key="num_products_input"
+            )
+             
+            # Only update the confirmed number when form is submitted
+            if st.form_submit_button("Confirm Count"):
+                st.session_state.confirmed_num = new_num
+                st.session_state.num_products = new_num
+                st.rerun()
         
+        # Display product inputs based on confirmed number
         st.session_state.wastage_items = []
-        for i in range(st.session_state.num_products):
+        for i in range(st.session_state.confirmed_num):
             st.write(f"**Wasted Product #{i+1}**")
             product_name = st.text_input(f"Product Name #{i+1}", key=f"prod_name_{i}")
             amount = st.text_input(f"Amount Wasted #{i+1}", key=f"prod_amount_{i}")
             if product_name and amount:  # Only add if both fields have values
                 st.session_state.wastage_items.append((product_name.strip(), amount.strip()))
     
-    # 7. Submit button
+    # Submit button
     if st.button("🚀 Submit Report"):
         if not submitter_name:
             st.error("Please enter your name.")
