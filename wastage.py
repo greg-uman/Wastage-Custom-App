@@ -61,10 +61,70 @@ def main():
 
     # Outlet options based on selected department
     outlet_options = {
-        "Retail": ["RET F 104", "RET B 105", "RET B 205"],
-        "Medallion Club": ["Gallery", "Stokegrill", "Terrace"],
+        "Retail":[
+            "RET B 108",
+            "RET B 121",
+            "RET B 128 - THE RUNNER",
+            "RET B 134",
+            "RET B 147 - JOHNNY WALKER",
+            "RET B 207",
+            "RET B 218",
+            "RET B 229",
+            "RET B 232",
+            "RET B 236",
+            "RET B 241",
+            "RET B 244",
+            "RET B 305 4 Pines",
+            "RET B 309",
+            "RET B 317",
+            "RET B 324",
+            "RET B 329",
+            "RET B 333",
+            "RET B 340",
+            "RET B 342",
+            "RET B 348",
+            "RET B 305",
+            "RET B 345",
+            "RET B 235 - CRAFT",
+            "RET B 238 - PERONI",
+            "RET B 335 - ALFREDS",
+            "RET B 338 - EDWARDS",
+            "Spare Location 1260",
+            "View Bar",
+            "RET B 102",
+            "RET C 106",
+            "RET C 118",
+            "RET C 130",
+            "RET C 143",
+            "RET C 243",
+            "RET C 305",
+            "RET C 320",
+            "RET C 329",
+            "RET C 344",
+            "RET F 104",
+            "RET F 118 - RUNNER",
+            "RET F 118 - Hot Dog Cart",
+            "RET F 131",
+            "RET F 145",
+            "RET F 205",
+            "RET F 220",
+            "RET F 231",
+            "RET F 242",
+            "RET F 305",
+            "RET F 320",
+            "Ret F 329",  # Note: lowercase 't' preserved as in original
+            "RET F 344",
+            "RET F 135 - 8 BIT",
+            "RET F 234",
+            "RET F 239",
+            "RET F 336",
+            "RET F 337",
+            "RET F 102 - 8 BIT",
+            "RET F 101 - EARL"
+        ],
+        "Medallion Club": ["Gallery", "Stokegrill", "Terrace", "Altis", "Sportsbar", "Lee Ho Fook"],
         "Functions": ["Victory Room", "Parker"],
-        "Corporate Suites": ["suites 1", "suites 2", "suites 3"]
+        "Corporate Suites":[f"Suites {i}" for i in range(1, 66)]
     }
     outlet = st.selectbox("📍 Outlet", outlet_options.get(department, []))
 
@@ -72,20 +132,15 @@ def main():
     has_wastage = st.radio("Any wastage today?", ["No", "Yes"], index=0)
     
     # Reset if toggled from Yes to No
-    if has_wastage == "No":
-        st.session_state.num_products = 1
-        st.session_state.confirmed_num = 1
-        st.session_state.wastage_items = []
-
     if has_wastage == "Yes":
         # Safeguard minimum value
         if st.session_state.num_products < 1:
             st.session_state.num_products = 1
 
-        with st.form("product_count_form"):
+        with st.form("product_count_form", enter_to_submit = False):
             # Number input with separate confirmed state
             new_num = st.number_input(
-                "Number of wasted products (Press Enter to confirm)",
+                "Number of wasted products (Enter number of produts, then press the confirm button)",
                 min_value=1, 
                 max_value=50, 
                 value=st.session_state.confirmed_num,
@@ -97,7 +152,6 @@ def main():
                 st.session_state.confirmed_num = new_num
                 st.session_state.num_products = new_num
                 st.rerun()
-        
         # Display product inputs based on confirmed number
         st.session_state.wastage_items = []
         for i in range(st.session_state.confirmed_num):
