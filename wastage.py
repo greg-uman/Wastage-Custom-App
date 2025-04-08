@@ -4,27 +4,53 @@ from datetime import datetime
 import os
 import boto3
 from io import BytesIO
+import logging
 
-# Set up AWS S3 client
-s3_client = boto3.client('s3', aws_access_key_id='YOUR_AWS_ACCESS_KEY', aws_secret_access_key='YOUR_AWS_SECRET_KEY')
-bucket_name = 'YOUR_BUCKET_NAME'
-filename = "wastage_report.xlsx"
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
 # 1. Set page config FIRST
 st.set_page_config(page_title="Food Waste Reporting", page_icon="🍽️")
 
+# 2. AWS Configuration - Use environment variables
+AWS_ACCESS_KEY_ID = st.secrets["aws"]["AWS_ACCESS_KEY_ID"]
+AWS_SECRET_ACCESS_KEY = st.secrets["aws"]["AWS_SECRET_ACCESS_KEY"]
+AWS_REGION = os.environ.get('AWS_REGION', 'ap-southeast-2')
+S3_BUCKET = os.environ.get('S3_BUCKET', 'my-food-waste-reports')
+S3_FILE = "wastage_report.xlsx"
+
+def initialize_s3_client():
+    """Initialize S3 client with error handling"""
+    try:
+        return boto3.client(
+            's3',
+            aws_access_key_id=AWS_ACCESS_KEY_ID,
+            aws_secret_access_key=AWS_SECRET_ACCESS_KEY,
+            region_name=AWS_REGION
+        )
+    except Exception as e:
+        logger.error(f"Failed to initialize S3 client: {str(e)}")
+        st.error("Failed to initialize cloud storage connection")
+        return None
+
 def main():
-    # 2. Maintain state across interactions
+    # Initialize S3 client
+    s3_client = initialize_s3_client()
+    if not s3_client:
+        return
+    
+    # 3. Maintain state across interactions
     if 'num_products' not in st.session_state:
         st.session_state.num_products = 0
     
     if 'wastage_items' not in st.session_state:
         st.session_state.wastage_items = []
 
-    # 3. Page title
+    # 4. Page title
     st.title("🍽️ Food Waste Reporting")
 
-    # 4. Basic user info
+    # 5. Basic user info
     username = st.text_input("👤 Your Name", value="")
 
     # Department selection
@@ -40,54 +66,61 @@ def main():
     }
     outlet = st.selectbox("📍 Outlet", outlet_options.get(department, []))
 
-    # 5. Wastage
+    # 6. Wastage reporting
     has_wastage = st.radio("Any wastage today?", ["No", "Yes"], index=0)
     
-    # If user toggles from "Yes" to "No", reset wastage inputs
+    # Reset if toggled from Yes to No
     if has_wastage == "No":
         st.session_state.num_products = 0
         st.session_state.wastage_items = []
 
-    # If "Yes", ask how many products
     if has_wastage == "Yes":
-        # Safeguard: clamp the session_state value to be at least 1
+        # Safeguard minimum value
         if st.session_state.num_products < 1:
             st.session_state.num_products = 1
 
         st.session_state.num_products = st.number_input(
-            "Number of wasted products (Press Enter to go to next step)",
+            "Number of wasted products (Press Enter to continue)",
             min_value=1, 
             max_value=50, 
             value=st.session_state.num_products
         )
-        # Display input fields for each product
+        
         st.session_state.wastage_items = []
         for i in range(st.session_state.num_products):
             st.write(f"**Wasted Product #{i+1}**")
             product_name = st.text_input(f"Product Name #{i+1}", key=f"prod_name_{i}")
             amount = st.text_input(f"Amount Wasted #{i+1}", key=f"prod_amount_{i}")
-            st.session_state.wastage_items.append((product_name, amount))
+            if product_name and amount:  # Only add if both fields have values
+                st.session_state.wastage_items.append((product_name.strip(), amount.strip()))
     
-    # 6. Submit button
+    # 7. Submit button
     if st.button("🚀 Submit Report"):
-        # Basic validation
         if not username:
             st.error("Please enter your name.")
             return
 
-        if has_wastage == "Yes" and st.session_state.num_products > 0:
-            # Save to S3
-            save_to_s3(
-                username=username,
-                department=department,
-                outlet=outlet,
-                wastage_list=st.session_state.wastage_items
-            )
-        else:
-            st.success("✅ No wastage reported, thank you!")
-    
-def save_to_s3(username, department, outlet, wastage_list):
-    # Desired column order
+        if has_wastage == "Yes" and not st.session_state.wastage_items:
+            st.error("Please enter all product details.")
+            return
+
+        try:
+            if has_wastage == "Yes":
+                save_to_s3(
+                    s3_client=s3_client,
+                    username=username,
+                    department=department,
+                    outlet=outlet,
+                    wastage_list=st.session_state.wastage_items
+                )
+            else:
+                st.success("✅ No wastage reported, thank you!")
+        except Exception as e:
+            logger.error(f"Submission error: {str(e)}")
+            st.error("Failed to save report. Please try again.")
+
+def save_to_s3(s3_client, username, department, outlet, wastage_list):
+    """Save data to S3 with proper error handling"""
     COLUMN_ORDER = [
         "Entry ID",
         "Timestamp",
@@ -100,49 +133,59 @@ def save_to_s3(username, department, outlet, wastage_list):
     
     timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    # Download the existing Excel file from S3
-    file_obj = s3_client.get_object(Bucket=bucket_name, Key=filename)
-    df = pd.read_excel(file_obj['Body'])
+    try:
+        # Try to download existing file
+        try:
+            file_obj = s3_client.get_object(Bucket=S3_BUCKET, Key=S3_FILE)
+            df = pd.read_excel(file_obj['Body'])
+        except s3_client.exceptions.NoSuchKey:
+            df = pd.DataFrame(columns=COLUMN_ORDER)
+        except Exception as e:
+            logger.error(f"Error reading existing file: {str(e)}")
+            df = pd.DataFrame(columns=COLUMN_ORDER)
 
-    # Calculate next Entry ID
-    if "Entry ID" in df.columns and not df["Entry ID"].empty:
-        entry_id = df["Entry ID"].max() + 1
-    else:
-        entry_id = 1
+        # Calculate next Entry ID
+        entry_id = df["Entry ID"].max() + 1 if "Entry ID" in df.columns and not df.empty else 1
 
-    # Build new rows
-    rows_to_add = []
-    for product, amount in wastage_list:
-        rows_to_add.append({
+        # Prepare new rows
+        new_rows = [{
             "Entry ID": entry_id,
             "Timestamp": timestamp,
             "Username": username,
             "Department": department,
             "Outlet": outlet,
-            "Product Name": product.strip() if product else "",
-            "Amount Wasted": amount.strip() if amount else "",
-        })
+            "Product Name": product,
+            "Amount Wasted": amount
+        } for product, amount in wastage_list]
 
-    # Append the new data to the existing DataFrame
-    new_df = pd.DataFrame(rows_to_add, columns=COLUMN_ORDER)
-    df = pd.concat([df, new_df], ignore_index=True)
+        new_df = pd.DataFrame(new_rows, columns=COLUMN_ORDER)
+        df = pd.concat([df, new_df], ignore_index=True)
 
-    # Save the updated DataFrame to a BytesIO object
-    excel_file = BytesIO()
-    with pd.ExcelWriter(excel_file, engine="xlsxwriter") as writer:
-        df.to_excel(writer, index=False, sheet_name="Wastage Report")
-        writer.save()
-    excel_file.seek(0)
+        # Save to in-memory Excel file
+        excel_buffer = BytesIO()
+        with pd.ExcelWriter(excel_buffer, engine="xlsxwriter") as writer:
+            df.to_excel(writer, index=False)
+        excel_buffer.seek(0)
 
-    # Upload the updated file back to S3
-    s3_client.put_object(Bucket=bucket_name, Key=filename, Body=excel_file)
-    
-    st.success(f"✅ Successfully saved {len(rows_to_add)} item(s) to {filename}!")
-    st.balloons()
+        # Upload to S3
+        s3_client.put_object(
+            Bucket=S3_BUCKET,
+            Key=S3_FILE,
+            Body=excel_buffer,
+            ContentType='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        
+        st.success(f"✅ Successfully saved {len(new_rows)} item(s)!")
+        st.balloons()
 
-    # Reset session state
-    st.session_state.num_products = 0
-    st.session_state.wastage_items = []
+    except Exception as e:
+        logger.error(f"S3 save error: {str(e)}")
+        raise
+
+    finally:
+        # Reset session state
+        st.session_state.num_products = 0
+        st.session_state.wastage_items = []
 
 if __name__ == "__main__":
     main()

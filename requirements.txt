@@ -3,3 +3,4 @@ pandas
 openpyxl
 qrcode
 boto3
+logging
