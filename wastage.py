@@ -6,6 +6,9 @@ import boto3
 from io import BytesIO
 import logging
 import xlsxwriter
+import qrcode
+from PIL import Image
+import io
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -20,6 +23,17 @@ AWS_SECRET_ACCESS_KEY = st.secrets["aws"]["AWS_SECRET_ACCESS_KEY"]
 AWS_REGION = os.environ.get('AWS_REGION', 'ap-southeast-2')
 S3_BUCKET = os.environ.get('S3_BUCKET', 'my-food-waste-reports')
 S3_FILE = "wastage_report.xlsx"
+
+def generate_qr(url, box_size=10):
+    qr = qrcode.QRCode(
+        version=1,
+        error_correction=qrcode.constants.ERROR_CORRECT_H,
+        box_size=box_size,
+        border=4,
+    )
+    qr.add_data(url)
+    qr.make(fit=True)
+    return qr.make_image(fill_color="black", back_color="white")
 
 def initialize_s3_client():
     """Initialize S3 client with error handling"""
@@ -140,7 +154,7 @@ def main():
         with st.form("product_count_form", enter_to_submit = False):
             # Number input with separate confirmed state
             new_num = st.number_input(
-                "Number of wasted products (Enter number of produts, then press the confirm button)",
+                "Number of wasted products (Enter number of products, then press the confirm button)",
                 min_value=1, 
                 max_value=50, 
                 value=st.session_state.confirmed_num,
@@ -185,6 +199,25 @@ def main():
         except Exception as e:
             logger.error(f"Submission error: {str(e)}")
             st.error("Failed to save report. Please try again.")
+
+    # Add QR section (sidebar or new tab)
+    with st.sidebar:
+        st.header("Mobile Access")
+        app_url = "https://your-app-name.streamlit.app"
+        
+        # Preview
+        qr_img = generate_qr(app_url, box_size=6)
+        img_bytes = io.BytesIO()
+        qr_img.save(img_bytes, format="PNG")
+        st.image(img_bytes, caption="Scan with phone camera")
+        
+        # Download
+        st.download_button(
+            label="Download QR (PNG)",
+            data=img_bytes.getvalue(),
+            file_name="wastage_qr.png",
+            mime="image/png"
+        )
 
 def save_to_s3(s3_client, submitter_name, department, outlet, wastage_list):
     """Save data to S3 with proper error handling"""
