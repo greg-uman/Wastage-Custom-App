@@ -5,6 +5,8 @@ import os
 import boto3
 from io import BytesIO
 import logging
+import xlsxwriter
+
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
