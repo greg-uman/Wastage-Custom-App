@@ -19,8 +19,19 @@ def main():
 
     # 4. Basic user info
     username = st.text_input("👤 Your Name", value="")
-    department = st.selectbox("🏢 Department", ["Bakery", "Kitchen", "Bar", "Other"])
-    outlet = st.selectbox("📍 Outlet", ["Main Counter", "Kiosk 1", "Kiosk 2", "Mobile Unit"])
+
+    # Department selection
+    dept_options = ["Retail", "Medallion Club", "Functions", "Corporate Suites"]
+    department = st.selectbox("🏢 Department", dept_options)
+
+    # Outlet options based on selected department
+    outlet_options = {
+        "Retail": ["RET F 104", "RET B 105", "RET B 205"],
+        "Medallion Club": ["Gallery", "Stokegrill", "Terrace"],
+        "Functions": ["Victory Room", "Parker"],
+        "Corporate Suites": ["suites 1", "suites 2", "suites 3"]
+    }
+    outlet = st.selectbox("📍 Outlet", outlet_options.get(department, []))
 
     # 5. Wastage
     has_wastage = st.radio("Any wastage today?", ["No", "Yes"], index=0)
@@ -29,21 +40,19 @@ def main():
     if has_wastage == "No":
         st.session_state.num_products = 0
         st.session_state.wastage_items = []
-    # Initialize to 0 if not present
-    if 'num_products' not in st.session_state:
-        st.session_state.num_products = 0
+
     # If "Yes", ask how many products
     if has_wastage == "Yes":
-    # Safeguard: clamp the session_state value to be at least 1
+        # Safeguard: clamp the session_state value to be at least 1
         if st.session_state.num_products < 1:
             st.session_state.num_products = 1
 
         st.session_state.num_products = st.number_input(
-            "Number of wasted products",
+            "Number of wasted products (Press Enter to go to next step)",
             min_value=1, 
             max_value=50, 
             value=st.session_state.num_products
-    )
+        )
         # Display input fields for each product
         st.session_state.wastage_items = []
         for i in range(st.session_state.num_products):
