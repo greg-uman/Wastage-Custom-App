@@ -53,7 +53,7 @@ def main():
     st.title("🍽️ Food Waste Reporting")
 
     # 5. Basic user info
-    username = st.text_input("👤 Your Name", value="")
+    submitter_name = st.text_input("👤 Your Name", value="")
 
     # Department selection
     dept_options = ["Retail", "Medallion Club", "Functions", "Corporate Suites"]
@@ -98,7 +98,7 @@ def main():
     
     # 7. Submit button
     if st.button("🚀 Submit Report"):
-        if not username:
+        if not submitter_name:
             st.error("Please enter your name.")
             return
 
@@ -110,7 +110,7 @@ def main():
             if has_wastage == "Yes":
                 save_to_s3(
                     s3_client=s3_client,
-                    username=username,
+                    submitter_name=submitter_name,
                     department=department,
                     outlet=outlet,
                     wastage_list=st.session_state.wastage_items
@@ -121,12 +121,12 @@ def main():
             logger.error(f"Submission error: {str(e)}")
             st.error("Failed to save report. Please try again.")
 
-def save_to_s3(s3_client, username, department, outlet, wastage_list):
+def save_to_s3(s3_client, submitter_name, department, outlet, wastage_list):
     """Save data to S3 with proper error handling"""
     COLUMN_ORDER = [
         "Entry ID",
         "Timestamp",
-        "Username",
+        "Submitter_Name",
         "Department",
         "Outlet",
         "Product Name",
@@ -153,7 +153,7 @@ def save_to_s3(s3_client, username, department, outlet, wastage_list):
         new_rows = [{
             "Entry ID": entry_id,
             "Timestamp": timestamp,
-            "Username": username,
+            "Submitter_name": submitter_name,
             "Department": department,
             "Outlet": outlet,
             "Product Name": product,
