@@ -203,7 +203,7 @@ def main():
     # Add QR section (sidebar or new tab)
     with st.sidebar:
         st.header("Mobile Access")
-        app_url = "https://your-app-name.streamlit.app"
+        app_url = "https://wastage-custom-app-be349qwejau7lcfqyqqkny.streamlit.app/"
         
         # Preview
         qr_img = generate_qr(app_url, box_size=6)
