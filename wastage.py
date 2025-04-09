@@ -15,7 +15,7 @@ logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # Set page config FIRST
-st.set_page_config(page_title="Food Waste Reporting", page_icon="🍽️")
+st.set_page_config(page_title="Outlet Wastage Reporting", page_icon="🍽️")
 
 # AWS Configuration - Use environment variables
 AWS_ACCESS_KEY_ID = st.secrets["aws"]["AWS_ACCESS_KEY_ID"]
@@ -211,13 +211,7 @@ def main():
         qr_img.save(img_bytes, format="PNG")
         st.image(img_bytes, caption="Scan with phone camera")
         
-        # Download
-        st.download_button(
-            label="Download QR (PNG)",
-            data=img_bytes.getvalue(),
-            file_name="wastage_qr.png",
-            mime="image/png"
-        )
+        
 
 def save_to_s3(s3_client, submitter_name, department, outlet, wastage_list):
     """Save data to S3 with proper error handling"""
