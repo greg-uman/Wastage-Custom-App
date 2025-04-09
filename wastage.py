@@ -64,7 +64,7 @@ def main():
         st.session_state.wastage_items = []
 
     # Page title
-    st.title("🍽️ Food Waste Reporting")
+    st.title("🍽️ Outlet Wastage Form")
 
     # Basic user info
     submitter_name = st.text_input("👤 Your Name", value="")
